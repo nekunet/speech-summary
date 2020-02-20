@@ -1,5 +1,7 @@
 # for Me
 APIKEY.txt
+*.wav
+*.json
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
