@@ -36,7 +36,7 @@ class SpeechSummary(object):
             record_time_seconds: レコーディング時間（秒）。
             input_device_index: 録音デバイスのインデックス番号
             filename: 音声ファイルを出力するファイル名。
-        
+
         Returns:
             出力した音声ファイル名
         """
@@ -80,19 +80,19 @@ class SpeechSummary(object):
         return filename
 
     def speech_to_text(self, audio_filename="recording.wav",
-                       speech_json_filename="speech.json", 
+                       speech_json_filename="speech.json",
                        json_output=False,
-                       speech_txt_filename = "speech.txt"):
-        """音声ファイルから、テキストファイルに出力する関数。
+                       speech_txt_filename="speech.txt"):
+        """音声ファイルから、テキストデータにする関数。
 
         WatsonのSpeech to TextのAPIを利用して、音声ファイルから文字に起こす。
 
         Args:
             audio_filename: 対象の音声ファイル。
             speech_json_file: Speech to Textから返されるjson形式の出力ファイル。
-            json_output: APIから返されるjson形式のデータをファイル出力するか。
+            json_output: APIから返されるjson形式のデータをファイルに出力するか。
             speech_txt_filename: 音声データを文字に起こしたtxt形式の出力ファイル。
-        
+
         Returns:
             音声を文字に起こしたテキストデータ。
         """
@@ -102,7 +102,7 @@ class SpeechSummary(object):
 
         # Watsonのspeech to text APIの初期化
         authenticator = IAMAuthenticator(self._speech_api_key)
-        
+
         # 認証
         speech_to_text = SpeechToTextV1(
             authenticator=authenticator
@@ -119,28 +119,33 @@ class SpeechSummary(object):
                 # APIに渡す設定
                 cont_type = "audio/wav"
                 lang = "ja-JP_BroadbandModel"
-                
+
                 # リクエストの送信
-                result = speech_to_text.recognize(audio=audio_file, content_type=cont_type, model=lang)
-            
+                result = speech_to_text.recognize(audio=audio_file,
+                                                  content_type=cont_type,
+                                                  model=lang)
+
             print("[INFO] Watsonからレスポンスを受信しました")
 
             # 結果をjson形式にdumps
             # ensure_ascii=Falseで日本語の文字化けに対応
-            result_json = json.dumps(result.get_result(), indent=2, ensure_ascii=False)
+            result_json = json.dumps(result.get_result(), indent=2,
+                                     ensure_ascii=False)
 
             # jsonファイルの保存
             if json_output:
                 with open(speech_json_filename, "w") as f:
                     f.write(result_json)
-                print("[INFO] Watsonからのレスポンスを {0} に保存しました".format(speech_json_filename))
+                print("[INFO] Watsonからのレスポンスを {0} に保存しました"
+                      .format(speech_json_filename))
 
             # transcriptの結果をリストに格納していく
             speech_list = []
             json_dict = json.loads(result_json)
             for i in range(len(json_dict["results"])):
                 # 単語間の空白を消す
-                tmp = json_dict["results"][i]["alternatives"][0]["transcript"].replace(" ", "")
+                tmp = json_dict["results"][i]
+                tmp = tmp["alternatives"][0]["transcript"].replace(" ", "")
                 speech_list.append(tmp)
 
             # txtファイルの保存
@@ -155,9 +160,72 @@ class SpeechSummary(object):
 
         # エラーハンドリング
         except ApiException as ex:
-            print("Method failed with status code " + str(ex.code) + ": " + ex.message)
+            print("Method failed with status code "
+                  + str(ex.code) + ": "
+                  + ex.message)
             exit()
 
         return speech_text
 
+    def text_summarization(self, sentences, linenumber="1",
+                           summary_json_filename="summary.json",
+                           json_output=False,
+                           summary_txt_filename="summary.txt"):
+        """テキストデータの文章を要約する関数。
 
+        A3RTのText Summarization APIを使って、文章を要約する。
+
+        Args:
+            sentences: テキストデータ。
+            summary_json_file: Text Summarization APIから返されるjson形式の出力ファイル。
+            json_output: APIから返されるjson形式のデータをファイル出力するか。
+            summary_txt_filename: 要約した文章のtxt形式の出力ファイル。
+
+        Returns:
+            要約したテキストデータ。
+        """
+
+        # returnする結果
+        summary_text = ""
+
+        # エンドポイント
+        endpoint = "https://api.a3rt.recruit-tech.co.jp/text_summarization/v1"
+
+        print("[INFO] A3RTにAPIリクエストを送信中")
+
+        # リクエストパラメータ
+        # linenumberは抽出文章数。1以上の整数で、入力した文章数より少ない数（API制約事項）
+        payload = {"apikey": self._summarization_api_key,
+                   "sentences": sentences,
+                   "linenumber": linenumber}
+
+        # リクエストをpost
+        r = requests.post(endpoint, payload)
+        result = r.json()
+
+        print("[INFO] A3RTからレスポンスを受信しました")
+
+        # jsonファイルの保存
+        if json_output:
+            with open(summary_json_filename, "w") as f:
+                f.write(json.dumps(result, indent=2, ensure_ascii=False))
+            print("[INFO] A3RTからのレスポンスを {0} に保存しました"
+                  .format(summary_json_filename))
+
+        if result["status"] == 0:
+            for i in range(len(result["summary"])):
+                summary_text += result["summary"][i] + "。\n"
+
+        # エラーハンドリング
+        else:
+            print("Method failed with status code "
+                  + str(result["status"]) + ": "
+                  + result["message"])
+            exit()
+
+        # txtファイルの保存
+        with open(summary_txt_filename, "w") as f:
+            f.write(summary_text)
+        print("[INFO] 要約した結果を {0} に保存しました".format(summary_txt_filename))
+
+        return summary_text

@@ -12,8 +12,12 @@ def main():
 
     ss = speech_summary.SpeechSummary(speech_api_key, summarization_api_key)
 
-    ss.record(record_time_seconds=10)
+    ss.record(record_time_seconds=15)
     speech_text = ss.speech_to_text()
+    result = ss.text_summarization(speech_text, linenumber="2")
+
+    print("[INFO] 要約結果")
+    print(result)
 
 
 if __name__ == "__main__":
