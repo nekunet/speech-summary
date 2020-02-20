@@ -38,7 +38,7 @@ class SpeechSummary(object):
             filename: 音声ファイルを出力するファイル名。
         
         Returns:
-            出力した音声ファイル名。
+            出力した音声ファイル名
         """
 
         # pyaudio初期化
@@ -78,4 +78,86 @@ class SpeechSummary(object):
         print("[INFO] {0} に音声ファイルを出力しました".format(filename))
 
         return filename
+
+    def speech_to_text(self, audio_filename="recording.wav",
+                       speech_json_filename="speech.json", 
+                       json_output=False,
+                       speech_txt_filename = "speech.txt"):
+        """音声ファイルから、テキストファイルに出力する関数。
+
+        WatsonのSpeech to TextのAPIを利用して、音声ファイルから文字に起こす。
+
+        Args:
+            audio_filename: 対象の音声ファイル。
+            speech_json_file: Speech to Textから返されるjson形式の出力ファイル。
+            json_output: APIから返されるjson形式のデータをファイル出力するか。
+            speech_txt_filename: 音声データを文字に起こしたtxt形式の出力ファイル。
+        
+        Returns:
+            音声を文字に起こしたテキストデータ。
+        """
+
+        # returnする結果
+        speech_text = ""
+
+        # Watsonのspeech to text APIの初期化
+        authenticator = IAMAuthenticator(self._speech_api_key)
+        
+        # 認証
+        speech_to_text = SpeechToTextV1(
+            authenticator=authenticator
+        )
+
+        # endpointはTokyo DCに設定
+        endpoint = "https://gateway-tok.watsonplatform.net/speech-to-text/api"
+        speech_to_text.set_service_url(endpoint)
+
+        try:
+            print("[INFO] WatsonにAPIリクエストを送信中")
+
+            with open(audio_filename, "rb") as audio_file:
+                # APIに渡す設定
+                cont_type = "audio/wav"
+                lang = "ja-JP_BroadbandModel"
+                
+                # リクエストの送信
+                result = speech_to_text.recognize(audio=audio_file, content_type=cont_type, model=lang)
+            
+            print("[INFO] Watsonからレスポンスを受信しました")
+
+            # 結果をjson形式にdumps
+            # ensure_ascii=Falseで日本語の文字化けに対応
+            result_json = json.dumps(result.get_result(), indent=2, ensure_ascii=False)
+
+            # jsonファイルの保存
+            if json_output:
+                with open(speech_json_filename, "w") as f:
+                    f.write(result_json)
+                print("[INFO] Watsonからのレスポンスを {0} に保存しました".format(speech_json_filename))
+
+            # transcriptの結果をリストに格納していく
+            speech_list = []
+            json_dict = json.loads(result_json)
+            for i in range(len(json_dict["results"])):
+                # 単語間の空白を消す
+                tmp = json_dict["results"][i]["alternatives"][0]["transcript"].replace(" ", "")
+                speech_list.append(tmp)
+
+            # txtファイルの保存
+            with open(speech_txt_filename, "w") as f:
+                for st in speech_list:
+                    f.write(st+"。\n")
+            print("[INFO] 音声認識の結果を {0} に保存しました".format(speech_txt_filename))
+
+            # 文末に丸をつけてjoin
+            for st in speech_list:
+                speech_text += st + "。"
+
+        # エラーハンドリング
+        except ApiException as ex:
+            print("Method failed with status code " + str(ex.code) + ": " + ex.message)
+            exit()
+
+        return speech_text
+
 
