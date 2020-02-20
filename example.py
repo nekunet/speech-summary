@@ -12,6 +12,8 @@ def main():
 
     ss = speech_summary.SpeechSummary(speech_api_key, summarization_api_key)
 
+    audio_file = ss.record(record_time_seconds=10)
+
 
 if __name__ == "__main__":
     main()
